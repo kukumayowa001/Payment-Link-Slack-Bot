@@ -209,21 +209,25 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   }
 
   try {
-    // Create Stripe Checkout Session (supports dynamic price_data)
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
+    // Option B: Force the Business Name by using an actual Stripe Product & Payment Link
+    // 1. First, create a Price for the service (this implicitly creates a Product or uses the name)
+    const price = await stripe.prices.create({
+      currency: 'usd',
+      unit_amount: amountCents,
+      product_data: {
+        name: serviceName,
+      },
+    });
+
+    console.log('✅ Stripe Price created:', price.id);
+
+    // 2. Create the actual Payment Link using that Price
+    const paymentLink = await stripe.paymentLinks.create({
       line_items: [
         {
-          price_data: {
-            currency: 'usd',
-            unit_amount: amountCents,
-            product_data: {
-              name: serviceName,
-            }
-          },
-          quantity: 1
-        }
+          price: price.id,
+          quantity: 1,
+        },
       ],
       metadata: {
         created_by_slack_user: userId,
@@ -231,12 +235,20 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
         client_email: clientEmail,
         slack_channel: channelId
       },
-      customer_email: clientEmail,
-      success_url: 'https://example.com/success',
-      cancel_url: 'https://example.com/cancel',
+      payment_method_types: ['card'],
+      payment_intent_data: {
+        setup_future_usage: 'off_session',
+      },
+      // Payment Links don't use 'customer_email' directly like Checkout Sessions do.
+      // However, we can enforce collecting the email in the Payment Link settings if needed.
     });
 
-    console.log('✅ Stripe session created:', session.id);
+    console.log('✅ Stripe Payment Link created:', paymentLink.id);
+
+    // So the rest of the code works as expected, we pass the paymentLink.url instead of session.url
+    const session = { url: paymentLink.url };
+
+    console.log('✅ Stripe session created:', session.url);
 
     // Replace the loading message with the actual payment link
     if (loadingMsg && loadingMsg.ts) {
