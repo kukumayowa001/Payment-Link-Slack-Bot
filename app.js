@@ -114,14 +114,15 @@ app.command('/create-payment-link', async ({ ack, body, client, logger }) => {
             block_id: 'service_name_block',
             label: {
               type: 'plain_text',
-              text: 'Service / Product Name'
+              text: 'Checkout Page Heading (e.g. Subscribe to...)'
             },
             element: {
               type: 'plain_text_input',
               action_id: 'service_name_input',
+              initial_value: 'Subscribe to Ilo Reputation',
               placeholder: {
                 type: 'plain_text',
-                text: 'e.g. Website Design Package'
+                text: 'e.g. Subscribe to Ilo Reputation Ultimate'
               }
             }
           },
@@ -139,6 +140,48 @@ app.command('/create-payment-link', async ({ ack, body, client, logger }) => {
                 type: 'plain_text',
                 text: 'e.g. 2700 or 150.50'
               }
+            }
+          },
+          {
+            type: 'input',
+            block_id: 'billing_frequency_block',
+            label: {
+              type: 'plain_text',
+              text: 'Billing Frequency'
+            },
+            element: {
+              type: 'static_select',
+              action_id: 'billing_frequency_input',
+              initial_option: {
+                text: {
+                  type: 'plain_text',
+                  text: 'One-time'
+                },
+                value: 'one_time'
+              },
+              options: [
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'One-time'
+                  },
+                  value: 'one_time'
+                },
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'Monthly'
+                  },
+                  value: 'month'
+                },
+                {
+                  text: {
+                    type: 'plain_text',
+                    text: 'Yearly'
+                  },
+                  value: 'year'
+                }
+              ]
             }
           }
         ]
@@ -173,6 +216,7 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   const clientEmail = values.client_email_block.client_email_input.value;
   const serviceName = values.service_name_block.service_name_input.value;
   const amountRaw = values.amount_block.amount_input.value;
+  const billingFrequency = values.billing_frequency_block.billing_frequency_input.selected_option.value;
 
   const metadata = JSON.parse(view.private_metadata);
   const userId = metadata.user_id;
@@ -209,15 +253,23 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   }
 
   try {
-    // Option B: Force the Business Name by using an actual Stripe Product & Payment Link
-    // 1. First, create a Price for the service (this implicitly creates a Product or uses the name)
-    const price = await stripe.prices.create({
+    // 1. First, create a Price for the service (this implicitly creates a Product)
+    const priceParams = {
       currency: 'usd',
       unit_amount: amountCents,
       product_data: {
         name: serviceName,
+        // Adding a description makes it show up in the line-item breakdown like Image 2
+        description: billingFrequency === 'one_time' ? 'One-time payment' : `Billed ${billingFrequency}ly`,
       },
-    });
+    };
+
+    // If it's a subscription, add the recurring property
+    if (billingFrequency !== 'one_time') {
+      priceParams.recurring = { interval: billingFrequency };
+    }
+
+    const price = await stripe.prices.create(priceParams);
 
     console.log('✅ Stripe Price created:', price.id);
 
@@ -235,11 +287,11 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
         client_email: clientEmail,
         slack_channel: channelId
       },
+      // Require billing address to trigger the "Tax" and "Subtotal" lines
+      billing_address_collection: 'required',
       // Enable both Card and Stripe Link (for "Save my information" feature)
       payment_method_types: ['card', 'link'],
       // Make "Save my information for a faster checkout" enabled by default
-      // This means customers' payment info is automatically saved to Link
-      // so they see: "Pay securely at Ilo Reputation and everywhere Link is accepted"
       consent_collection: {
         payment_method_reuse_agreement: {
           position: 'hidden',
@@ -248,6 +300,10 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
       payment_intent_data: {
         setup_future_usage: 'off_session',
       },
+      // Enable "Add promotion code" link on the checkout page
+      allow_promotion_codes: true,
+      // Enable Automatic Tax to show the "Tax" and "Subtotal" breakdown
+      automatic_tax: { enabled: true },
     });
 
     console.log('✅ Stripe Payment Link created:', paymentLink.id);
