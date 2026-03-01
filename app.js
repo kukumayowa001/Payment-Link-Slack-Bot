@@ -235,12 +235,19 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
         client_email: clientEmail,
         slack_channel: channelId
       },
-      payment_method_types: ['card'],
+      // Enable both Card and Stripe Link (for "Save my information" feature)
+      payment_method_types: ['card', 'link'],
+      // Make "Save my information for a faster checkout" enabled by default
+      // This means customers' payment info is automatically saved to Link
+      // so they see: "Pay securely at Ilo Reputation and everywhere Link is accepted"
+      consent_collection: {
+        payment_method_reuse_agreement: {
+          position: 'hidden',
+        },
+      },
       payment_intent_data: {
         setup_future_usage: 'off_session',
       },
-      // Payment Links don't use 'customer_email' directly like Checkout Sessions do.
-      // However, we can enforce collecting the email in the Payment Link settings if needed.
     });
 
     console.log('✅ Stripe Payment Link created:', paymentLink.id);
