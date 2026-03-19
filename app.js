@@ -376,7 +376,7 @@ expressApp.get('/', (req, res) => {
     if (isSocketMode) {
       await app.start();
       console.log('⚡ Slack bot connected via Socket Mode!');
-      expressApp.listen(PORT, () => {
+      expressApp.listen(PORT, '0.0.0.0', () => {
         console.log(`💳 Whop webhook listener on port ${PORT}`);
       });
     } else {
