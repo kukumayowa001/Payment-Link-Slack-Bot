@@ -190,11 +190,10 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
       // So we store all our tracking data as JSON inside internal_notes
       internal_notes: JSON.stringify({
         slack_user: userId,
-        service: serviceName,
-        client: clientName,
-        email: clientEmail,
         channel: channelId,
-        _display: `Created by Slack. Service: ${serviceName}. Client: ${clientName} (${clientEmail}). Rep: ${userId}.`
+        service: serviceName.substring(0, 50),
+        client: clientName.substring(0, 40),
+        email: clientEmail.substring(0, 40)
       })
     });
 
