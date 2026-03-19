@@ -189,11 +189,11 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
       // Whop SDK doesn't natively support the metadata parameter on this endpoint
       // So we store all our tracking data as JSON inside internal_notes
       internal_notes: JSON.stringify({
-        slack_user: userId,
-        channel: channelId,
-        service: serviceName.substring(0, 50),
-        client: clientName.substring(0, 40),
-        email: clientEmail.substring(0, 40)
+        sl: userId, // Shortened keys to save space
+        sv: serviceName.substring(0, 30),
+        cl: clientName.substring(0, 30),
+        em: clientEmail.substring(0, 50),
+        ch: channelId
       })
     });
 
@@ -311,11 +311,11 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
         console.warn('Could not parse internal notes as JSON', e.message);
       }
       
-      const slackUserId = parsedNotes.slack_user;
-      const clientName = parsedNotes.client || 'the client';
-      const clientEmail = parsedNotes.email || '';
-      const serviceName = parsedNotes.service || 'Service';
-      const slackChannel = parsedNotes.channel || process.env.SLACK_NOTIFICATION_CHANNEL || '#sales-create-payment-link';
+      const slackUserId = parsedNotes.sl;
+      const clientName = parsedNotes.cl || 'the client';
+      const clientEmail = parsedNotes.em || '';
+      const serviceName = parsedNotes.sv || 'Service';
+      const slackChannel = parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#sales-create-payment-link';
 
       if (slackUserId) {
         const { WebClient } = require('@slack/web-api');
