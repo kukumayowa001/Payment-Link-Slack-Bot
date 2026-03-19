@@ -189,9 +189,9 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
       // Whop SDK doesn't natively support the metadata parameter on this endpoint
       // So we store all our tracking data as JSON inside internal_notes
       internal_notes: JSON.stringify({
-        sl: userId, // Shortened keys to save space
-        sv: serviceName.substring(0, 30),
-        cl: clientName.substring(0, 30),
+        sl: userId,
+        sv: serviceName.substring(0, 60),
+        cl: clientName.substring(0, 60),
         em: clientEmail.substring(0, 50),
         ch: channelId
       })
