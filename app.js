@@ -1,10 +1,11 @@
 // ============================================================
-// PAYMENT LINK BOT — Main Application File (Slash Commands)
+// WHOP PAYMENT LINK BOT — Main Application File
 // ============================================================
 
 const { App, ExpressReceiver } = require('@slack/bolt');
-const Stripe = require('stripe');
+const Whop = require('@whop/sdk').default;
 const express = require('express');
+const crypto = require('crypto');
 require('dotenv').config();
 
 // --- Detect Socket Mode (local) vs HTTP (production) ---
@@ -31,25 +32,22 @@ if (isSocketMode) {
 }
 
 const app = new App(appConfig);
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const whop = new Whop({ apiKey: process.env.WHOP_API_KEY });
 
 // ============================================================
-// STEP 1: Listen for /create-payment-link slash command
+// STEP 1: Listen for /create-whop-payment-link slash command
 //         → Open a modal form
 // ============================================================
-app.command('/create-payment-link', async ({ ack, body, client, logger }) => {
-  // 1. Acknowledge the command IMMEDIATELY to prevent "dispatch_failed" / "expired_trigger_id"
+app.command('/create-whop-payment-link', async ({ ack, body, client }) => {
   await ack();
-  console.log('📥 Received /create-payment-link command from user:', body.user_id);
+  console.log('📥 Received /create-whop-payment-link command from user:', body.user_id);
 
-  // 2. Open the modal asynchronously
   try {
-    const result = await client.views.open({
+    await client.views.open({
       trigger_id: body.trigger_id,
       view: {
         type: 'modal',
         callback_id: 'create_payment_link_modal',
-        // Store who ran the command and in which channel
         private_metadata: JSON.stringify({
           user_id: body.user_id,
           channel_id: body.channel_id || process.env.SLACK_CHANNEL_ID
@@ -74,114 +72,47 @@ app.command('/create-payment-link', async ({ ack, body, client, logger }) => {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: 'Fill out the details below to generate a Stripe Checkout session.'
+              text: 'Fill out the details below to generate a Whop Checkout session.'
             }
           },
           {
             type: 'input',
             block_id: 'client_name_block',
-            label: {
-              type: 'plain_text',
-              text: 'Client Name'
-            },
+            label: { type: 'plain_text', text: 'Client Name' },
             element: {
               type: 'plain_text_input',
               action_id: 'client_name_input',
-              placeholder: {
-                type: 'plain_text',
-                text: 'e.g. Richard Rosen'
-              }
+              placeholder: { type: 'plain_text', text: 'e.g. Richard Rosen' }
             }
           },
           {
             type: 'input',
             block_id: 'client_email_block',
-            label: {
-              type: 'plain_text',
-              text: 'Client Email'
-            },
+            label: { type: 'plain_text', text: 'Client Email' },
             element: {
               type: 'plain_text_input',
               action_id: 'client_email_input',
-              placeholder: {
-                type: 'plain_text',
-                text: 'e.g. client@email.com'
-              }
+              placeholder: { type: 'plain_text', text: 'e.g. client@email.com' }
             }
           },
           {
             type: 'input',
             block_id: 'service_name_block',
-            label: {
-              type: 'plain_text',
-              text: 'Checkout Page Heading (e.g. Subscribe to...)'
-            },
+            label: { type: 'plain_text', text: 'Service / Product Name' },
             element: {
               type: 'plain_text_input',
               action_id: 'service_name_input',
-              initial_value: 'Subscribe to Ilo Reputation',
-              placeholder: {
-                type: 'plain_text',
-                text: 'e.g. Subscribe to Ilo Reputation Ultimate'
-              }
+              placeholder: { type: 'plain_text', text: 'e.g. Website Design Package' }
             }
           },
           {
             type: 'input',
             block_id: 'amount_block',
-            label: {
-              type: 'plain_text',
-              text: 'Amount (USD — numbers only)'
-            },
+            label: { type: 'plain_text', text: 'Amount (USD — numbers only)' },
             element: {
               type: 'plain_text_input',
               action_id: 'amount_input',
-              placeholder: {
-                type: 'plain_text',
-                text: 'e.g. 2700 or 150.50'
-              }
-            }
-          },
-          {
-            type: 'input',
-            block_id: 'billing_frequency_block',
-            label: {
-              type: 'plain_text',
-              text: 'Billing Frequency'
-            },
-            element: {
-              type: 'static_select',
-              action_id: 'billing_frequency_input',
-              initial_option: {
-                text: {
-                  type: 'plain_text',
-                  text: 'One-time'
-                },
-                value: 'one_time'
-              },
-              options: [
-                {
-                  text: {
-                    type: 'plain_text',
-                    text: 'One-time'
-                  },
-                  value: 'one_time'
-                },
-                {
-                  text: {
-                    type: 'plain_text',
-                    text: 'Monthly'
-                  },
-                  value: 'month'
-                },
-                {
-                  text: {
-                    type: 'plain_text',
-                    text: 'Yearly'
-                  },
-                  value: 'year'
-                }
-              ]
+              placeholder: { type: 'plain_text', text: 'e.g. 2700 or 150.50' }
             }
           }
         ]
@@ -190,7 +121,6 @@ app.command('/create-payment-link', async ({ ack, body, client, logger }) => {
     console.log('✅ Modal opened successfully');
   } catch (error) {
     console.error('❌ Error opening modal:', error);
-    // Let the user know if opening the modal failed
     try {
       await client.chat.postEphemeral({
         channel: body.channel_id || process.env.SLACK_CHANNEL_ID,
@@ -205,10 +135,10 @@ app.command('/create-payment-link', async ({ ack, body, client, logger }) => {
 
 // ============================================================
 // STEP 2: Handle modal form submission
-//         → Create Stripe Checkout Session
+//         → Create Whop Plan (payment link)
 //         → Post the link to Slack
 // ============================================================
-app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
+app.view('create_payment_link_modal', async ({ ack, view, client }) => {
   console.log('📥 Received modal submission');
 
   const values = view.state.values;
@@ -216,7 +146,6 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   const clientEmail = values.client_email_block.client_email_input.value;
   const serviceName = values.service_name_block.service_name_input.value;
   const amountRaw = values.amount_block.amount_input.value;
-  const billingFrequency = values.billing_frequency_block.billing_frequency_input.selected_option.value;
 
   const metadata = JSON.parse(view.private_metadata);
   const userId = metadata.user_id;
@@ -225,20 +154,17 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   // Validate amount
   const amountNum = parseFloat(amountRaw);
   if (isNaN(amountNum) || amountNum <= 0) {
-    // Return an error back to the modal
     await ack({
       response_action: 'errors',
       errors: {
-        'amount_block': 'Please enter a valid number greater than 0.'
+        amount_block: 'Please enter a valid number greater than 0.'
       }
     });
     return;
   }
 
-  // Tell Slack the modal was successfully parsed
   await ack();
 
-  const amountCents = Math.round(amountNum * 100);
   console.log(`💰 Creating payment link: ${serviceName} - $${amountNum.toFixed(2)} for ${clientName}`);
 
   // Send a loading message
@@ -253,65 +179,29 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   }
 
   try {
-    // 1. First, create a Price for the service (this implicitly creates a Product)
-    const priceParams = {
-      currency: 'usd',
-      unit_amount: amountCents,
-      product_data: {
-        name: serviceName,
-        // Adding a description makes it show up in the line-item breakdown like Image 2
-        description: billingFrequency === 'one_time' ? 'One-time payment' : `Billed ${billingFrequency}ly`,
-      },
-    };
-
-    // If it's a subscription, add the recurring property
-    if (billingFrequency !== 'one_time') {
-      priceParams.recurring = { interval: billingFrequency };
-    }
-
-    const price = await stripe.prices.create(priceParams);
-
-    console.log('✅ Stripe Price created:', price.id);
-
-    // 2. Create the actual Payment Link using that Price
-    const paymentLink = await stripe.paymentLinks.create({
-      line_items: [
-        {
-          price: price.id,
-          quantity: 1,
-        },
-      ],
-      metadata: {
-        created_by_slack_user: userId,
-        client_name: clientName,
-        client_email: clientEmail,
-        slack_channel: channelId
-      },
-      // Require billing address to trigger the "Tax" and "Subtotal" lines
-      billing_address_collection: 'required',
-      // Enable both Card and Stripe Link (for "Save my information" feature)
-      payment_method_types: ['card', 'link'],
-      // Make "Save my information for a faster checkout" enabled by default
-      consent_collection: {
-        payment_method_reuse_agreement: {
-          position: 'hidden',
-        },
-      },
-      payment_intent_data: {
-        setup_future_usage: 'off_session',
-      },
-      // Enable "Add promotion code" link on the checkout page
-      allow_promotion_codes: true,
-      // Enable Automatic Tax to show the "Tax" and "Subtotal" breakdown
-      automatic_tax: { enabled: true },
+    // Create Whop Plan (payment link)
+    const plan = await whop.plans.create({
+      company_id: process.env.WHOP_COMPANY_ID,
+      access_pass_id: process.env.WHOP_PRODUCT_ID,
+      initial_price: amountNum,
+      plan_type: 'one_time',
+      title: `${serviceName} for ${clientName}`,
+      // Whop SDK doesn't natively support the metadata parameter on this endpoint
+      // So we store all our tracking data as JSON inside internal_notes
+      internal_notes: JSON.stringify({
+        slack_user: userId,
+        service: serviceName,
+        client: clientName,
+        email: clientEmail,
+        channel: channelId,
+        _display: `Created by Slack. Service: ${serviceName}. Client: ${clientName} (${clientEmail}). Rep: ${userId}.`
+      })
     });
 
-    console.log('✅ Stripe Payment Link created:', paymentLink.id);
+    const paymentUrl = plan.purchase_url;
+    const paymentId = plan.id;
 
-    // So the rest of the code works as expected, we pass the paymentLink.url instead of session.url
-    const session = { url: paymentLink.url };
-
-    console.log('✅ Stripe session created:', session.url);
+    console.log('✅ Whop Plan created:', paymentId);
 
     // Replace the loading message with the actual payment link
     if (loadingMsg && loadingMsg.ts) {
@@ -352,7 +242,7 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*🔗 Payment URL:*\n${session.url}`
+            text: `*🔗 Payment URL:*\n${paymentUrl}`
           }
         }
       ]
@@ -363,7 +253,6 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
   } catch (error) {
     console.error('❌ Error creating payment link:', error);
 
-    // Notify user of error
     if (loadingMsg && loadingMsg.ts) {
       await client.chat.update({
         channel: channelId,
@@ -380,37 +269,56 @@ app.view('create_payment_link_modal', async ({ ack, view, client, logger }) => {
 });
 
 // ============================================================
-// STEP 3: Stripe Webhook — When a client pays
+// STEP 3: Whop Webhook — When a client pays
 // ============================================================
-// We use Bolt's built-in Express router in production allowing both Slack endpoints 
-// and Stripe webhooks to share a single port (which Railway requires).
 const expressApp = isSocketMode ? express() : receiver.router;
 
-expressApp.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  // Verify webhook signature
+  const sig = req.headers['x-whop-signature'];
+  const secret = process.env.WHOP_WEBHOOK_SECRET;
 
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-  } catch (err) {
-    console.error('❌ Webhook verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+  if (secret && sig) {
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(req.body)
+      .digest('hex');
+
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      console.error('❌ Webhook verification failed: invalid signature');
+      return res.status(401).send('Unauthorized');
+    }
   }
 
-  console.log('📥 Stripe webhook received:', event.type);
+  try {
+    const body = JSON.parse(req.body.toString());
+    console.log('📥 Whop webhook received:', body.action);
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
+    if (body.action === 'payment.succeeded') {
+      const payment = body.data;
+      const planId = payment.plan_id;
+      const paymentId = payment.id;
+      const amountPaid = (payment.final_amount / 100).toFixed(2);
 
-    const slackUserId = session.metadata?.created_by_slack_user;
-    const clientName = session.metadata?.client_name;
-    const clientEmail = session.metadata?.client_email;
-    const slackChannel = session.metadata?.slack_channel || process.env.SLACK_CHANNEL_ID;
-    const amountPaid = (session.amount_total / 100).toFixed(2);
-
-    if (slackUserId && slackChannel) {
+      // Retrieve plan details to get metadata stored in internal_notes
+      const planDetails = await whop.plans.retrieve(planId);
+      
+      let parsedNotes = {};
       try {
+        if (planDetails.internal_notes) {
+          parsedNotes = JSON.parse(planDetails.internal_notes);
+        }
+      } catch (e) {
+        console.warn('Could not parse internal notes as JSON', e.message);
+      }
+      
+      const slackUserId = parsedNotes.slack_user;
+      const clientName = parsedNotes.client || 'the client';
+      const clientEmail = parsedNotes.email || '';
+      const serviceName = parsedNotes.service || 'Service';
+      const slackChannel = parsedNotes.channel || process.env.SLACK_NOTIFICATION_CHANNEL || '#sales-create-payment-link';
+
+      if (slackUserId) {
         const { WebClient } = require('@slack/web-api');
         const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -433,26 +341,29 @@ expressApp.post('/stripe/webhook', express.raw({ type: 'application/json' }), as
                 text: [
                   `<@${slackUserId}> — your client just paid!`,
                   ``,
-                  `*Client:* ${clientName} (${clientEmail})`,
+                  `*Client:* ${clientName}${clientEmail ? ` (${clientEmail})` : ''}`,
+                  `*Service:* ${serviceName}`,
                   `*Amount Paid:* $${amountPaid}`,
-                  `*Session ID:* \`${session.payment_intent}\``
+                  `*Payment ID:* \`${paymentId}\``,
+                  `*Whop Plan ID:* \`${planId}\``
                 ].join('\n')
               }
             }
           ]
         });
         console.log('✅ Payment confirmation posted to Slack!');
-      } catch (slackErr) {
-        console.error('❌ Error posting payment confirmation to Slack:', slackErr);
       }
     }
-  }
 
-  res.json({ received: true });
+    res.json({ received: true });
+  } catch (err) {
+    console.error('❌ Webhook error:', err);
+    res.status(500).send('Error');
+  }
 });
 
 expressApp.get('/', (req, res) => {
-  res.send('Payment Link Bot is running!');
+  res.send('Whop Payment Link Bot is running!');
 });
 
 // ============================================================
@@ -462,18 +373,15 @@ expressApp.get('/', (req, res) => {
   try {
     const PORT = process.env.PORT || 3000;
 
-    // Bolt's app.start() takes the port for HTTP mode
     if (isSocketMode) {
       await app.start();
       console.log('⚡ Slack bot connected via Socket Mode!');
-      // Explicitly start our fallback Express server for local Stripe Webhooks
       expressApp.listen(PORT, () => {
-        console.log(`💳 Stripe webhook listener on port ${PORT}`);
+        console.log(`💳 Whop webhook listener on port ${PORT}`);
       });
     } else {
-      // In HTTP mode with a custom receiver, app.start takes the port
       await app.start(PORT);
-      console.log(`⚡ Slack bot & 💳 Stripe webhook listening on port ${PORT} via HTTP mode!`);
+      console.log(`⚡ Slack bot & 💳 Whop webhook listening on port ${PORT} via HTTP mode!`);
     }
 
     console.log('✅ Payment Link Bot is running!');
