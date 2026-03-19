@@ -185,7 +185,7 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
       access_pass_id: process.env.WHOP_PRODUCT_ID,
       initial_price: amountNum,
       plan_type: 'one_time',
-      title: `${serviceName} for ${clientName}`,
+      title: `${serviceName} for ${clientName}`.substring(0, 30),
       // Whop SDK doesn't natively support the metadata parameter on this endpoint
       // So we store all our tracking data as JSON inside internal_notes
       internal_notes: JSON.stringify({
@@ -284,7 +284,7 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
       .update(req.body)
       .digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
       console.error('❌ Webhook verification failed: invalid signature');
       return res.status(401).send('Unauthorized');
     }
