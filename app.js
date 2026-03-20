@@ -11,14 +11,14 @@ require('dotenv').config();
 // --- Detect Socket Mode (local) vs HTTP (production) ---
 const isSocketMode = !!process.env.SLACK_APP_TOKEN;
 
-// 1. Initialize ExpressReceiver for production (HTTP) mode
+// 1. Initialize ExpressReceiver (This will handle our HTTP server)
 const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
 });
 
 const appConfig = {
   token: process.env.SLACK_BOT_TOKEN,
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  receiver: receiver,
 };
 
 if (isSocketMode) {
@@ -26,12 +26,11 @@ if (isSocketMode) {
   appConfig.appToken = process.env.SLACK_APP_TOKEN;
   console.log('🔌 Running in Socket Mode (local development)');
 } else {
-  appConfig.socketMode = false;
-  appConfig.receiver = receiver;
   console.log('🌐 Running in HTTP mode (production)');
 }
 
 const app = new App(appConfig);
+const expressApp = receiver.app; // This is the Express instance powering the bot
 const whop = new Whop({ apiKey: process.env.WHOP_API_KEY });
 
 // ============================================================
@@ -270,7 +269,6 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
 // ============================================================
 // STEP 3: Whop Webhook — When a client pays
 // ============================================================
-const expressApp = isSocketMode ? express() : receiver.router;
 
 // Debug middleware to log ALL incoming requests
 expressApp.use((req, res, next) => {
@@ -389,17 +387,16 @@ expressApp.get('/', (req, res) => {
     const PORT = process.env.PORT || 3000;
 
     if (isSocketMode) {
-      await app.start();
-      console.log('⚡ Slack bot connected via Socket Mode!');
+      await app.start(); // Connects Slack via Socket Mode
       expressApp.listen(PORT, '0.0.0.0', () => {
-        console.log(`💳 Whop webhook listener on port ${PORT}`);
+        console.log(`💳 Whop webhook listener on port ${PORT} (Socket Mode Active)`);
       });
     } else {
-      await app.start(PORT);
-      console.log(`⚡ Slack bot & 💳 Whop webhook listening on port ${PORT} via HTTP mode!`);
+      await app.start(PORT); // Starts HTTP server for Slack + Webhooks
+      console.log(`⚡ Bot & Webhooks listening on port ${PORT}`);
     }
 
-    console.log('✅ Payment Link Bot is running!');
+    console.log('✅ Payment Link Bot is fully operational!');
   } catch (error) {
     console.error('❌ Failed to start the bot:', error);
   }
