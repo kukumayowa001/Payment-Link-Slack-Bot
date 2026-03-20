@@ -12,9 +12,14 @@ require('dotenv').config();
 const isSocketMode = !!process.env.SLACK_APP_TOKEN;
 
 // 1. Initialize ExpressReceiver (This will handle our HTTP server)
+// Note: Bolt requires a signing secret, but we use a dummy one if it's missing to avoid crashing Railway.
 const receiver = new ExpressReceiver({
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  signingSecret: process.env.SLACK_SIGNING_SECRET || 'fallback_secret_to_prevent_crash_in_railway',
 });
+
+if (!process.env.SLACK_SIGNING_SECRET) {
+  console.warn('⚠️ WARNING: SLACK_SIGNING_SECRET is missing. Webhooks might be insecure.');
+}
 
 const appConfig = {
   token: process.env.SLACK_BOT_TOKEN,
