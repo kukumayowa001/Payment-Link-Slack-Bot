@@ -22,12 +22,14 @@ const receiver = new ExpressReceiver({
 
 const appConfig = {
   token: process.env.SLACK_BOT_TOKEN,
-  receiver: receiver,
 };
 
 if (isSocketMode) {
   appConfig.socketMode = true;
   appConfig.appToken = process.env.SLACK_APP_TOKEN;
+} else {
+  // Only pass receiver for HTTP mode (Production without Socket Mode)
+  appConfig.receiver = receiver;
 }
 
 const app = new App(appConfig);
