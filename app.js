@@ -272,6 +272,16 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
 // ============================================================
 const expressApp = isSocketMode ? express() : receiver.router;
 
+// Debug middleware to log ALL incoming requests
+expressApp.use((req, res, next) => {
+  console.log(`🔌 [Express] ${req.method} ${req.path}`);
+  next();
+});
+
+expressApp.get('/whop/webhook', (req, res) => {
+  res.send('Ready to receive Whop Webhooks at this URL (POST)!');
+});
+
 expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   // Verify webhook signature
   const sig = req.headers['x-whop-signature'];
