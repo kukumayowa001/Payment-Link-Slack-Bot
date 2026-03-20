@@ -11,15 +11,14 @@ require('dotenv').config();
 // --- Detect Socket Mode (local) vs HTTP (production) ---
 const isSocketMode = !!process.env.SLACK_APP_TOKEN;
 
-// 1. Initialize ExpressReceiver (This will handle our HTTP server)
-// Note: Bolt requires a signing secret, but we use a dummy one if it's missing to avoid crashing Railway.
-const receiver = new ExpressReceiver({
-  signingSecret: process.env.SLACK_SIGNING_SECRET || 'fallback_secret_to_prevent_crash_in_railway',
-});
+// 1. Initialize Express App first
+const expressApp = express();
 
-if (!process.env.SLACK_SIGNING_SECRET) {
-  console.warn('⚠️ WARNING: SLACK_SIGNING_SECRET is missing. Webhooks might be insecure.');
-}
+// 2. Initialize ExpressReceiver using our Express App
+const receiver = new ExpressReceiver({
+  signingSecret: process.env.SLACK_SIGNING_SECRET || 'safeguard_secret',
+  app: expressApp // This tells Bolt to use our express instance
+});
 
 const appConfig = {
   token: process.env.SLACK_BOT_TOKEN,
@@ -29,13 +28,9 @@ const appConfig = {
 if (isSocketMode) {
   appConfig.socketMode = true;
   appConfig.appToken = process.env.SLACK_APP_TOKEN;
-  console.log('🔌 Running in Socket Mode (local development)');
-} else {
-  console.log('🌐 Running in HTTP mode (production)');
 }
 
 const app = new App(appConfig);
-const expressApp = receiver.app; // This is the Express instance powering the bot
 const whop = new Whop({ apiKey: process.env.WHOP_API_KEY });
 
 // ============================================================
