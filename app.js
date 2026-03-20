@@ -298,17 +298,23 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
       const planId = payment.plan_id;
       const paymentId = payment.id;
       const amountPaid = (payment.final_amount / 100).toFixed(2);
+      
+      console.log(`💰 Payment success event! Plan: ${planId}, Amount: ${amountPaid}`);
 
       // Retrieve plan details to get metadata stored in internal_notes
       const planDetails = await whop.plans.retrieve(planId);
+      console.log('📄 Plan details retrieved from Whop');
       
       let parsedNotes = {};
       try {
         if (planDetails.internal_notes) {
           parsedNotes = JSON.parse(planDetails.internal_notes);
+          console.log('📝 Parsed internal notes:', JSON.stringify(parsedNotes));
+        } else {
+          console.log('⚠️ No internal notes found on this plan');
         }
       } catch (e) {
-        console.warn('Could not parse internal notes as JSON', e.message);
+        console.warn('❌ Could not parse internal notes as JSON:', e.message);
       }
       
       const slackUserId = parsedNotes.sl;
