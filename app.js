@@ -301,9 +301,11 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
 
   try {
     const body = JSON.parse(req.body.toString());
-    console.log('📥 Whop webhook received:', body.action);
+    console.log(`📥 Webhook Received! Action: "${body.action}"`);
+    console.log('📦 Full Body (Keys):', Object.keys(body).join(', '));
 
-    if (body.action === 'payment.succeeded') {
+    // Handle both "payment.succeeded" and "payment_succeeded" just in case
+    if (body.action === 'payment.succeeded' || body.action === 'payment_succeeded') {
       const payment = body.data;
       const planId = payment.plan_id;
       const paymentId = payment.id;
