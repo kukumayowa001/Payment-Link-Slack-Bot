@@ -321,6 +321,7 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
       const amountPaid = payment.final_amount ? (payment.final_amount / 100).toFixed(2) : '0.00';
       
       console.log(`💰 Payment event detected! Plan: ${planId}, Amount: ${amountPaid}`);
+      console.log('🚀 Progress: Event validated, moving to Plan retrieval...');
 
       // Retrieve plan details (Safely)
       let planDetails = {};
@@ -354,6 +355,7 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
       const slackChannel = parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#create-payment-link';
 
       console.log(`📣 Preparation for Slack Message: Channel=${slackChannel}, UserID=${slackUserId || 'MISSING (Fallback used)'}`);
+      console.log('🚀 Progress: Reached Slack Notification Block');
 
       try {
         const { WebClient } = require('@slack/web-api');
