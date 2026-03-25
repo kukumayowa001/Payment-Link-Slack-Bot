@@ -351,7 +351,7 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
       const clientName = parsedNotes.cl || 'Test Client';
       const clientEmail = parsedNotes.em || 'test@example.com';
       const serviceName = parsedNotes.sv || 'Test Service';
-      const slackChannel = parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#sales-create-payment-link';
+      const slackChannel = parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#create-payment-link';
 
       console.log(`📣 Preparation for Slack Message: Channel=${slackChannel}, UserID=${slackUserId || 'MISSING (Fallback used)'}`);
 
