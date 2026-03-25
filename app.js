@@ -330,46 +330,46 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
       }
       
       const slackUserId = parsedNotes.sl;
-      const clientName = parsedNotes.cl || 'the client';
-      const clientEmail = parsedNotes.em || '';
-      const serviceName = parsedNotes.sv || 'Service';
+      const clientName = parsedNotes.cl || 'Test Client';
+      const clientEmail = parsedNotes.em || 'test@example.com';
+      const serviceName = parsedNotes.sv || 'Test Service';
       const slackChannel = parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#sales-create-payment-link';
 
-      if (slackUserId) {
-        const { WebClient } = require('@slack/web-api');
-        const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+      console.log(`📣 Preparation for Slack Message: Channel=${slackChannel}, UserID=${slackUserId || 'MISSING (Fallback used)'}`);
 
-        await slackClient.chat.postMessage({
-          channel: slackChannel,
-          text: `💰 Payment Received from ${clientName}!`,
-          blocks: [
-            {
-              type: 'header',
-              text: {
-                type: 'plain_text',
-                text: '💰 PAYMENT RECEIVED! 🎉',
-                emoji: true
-              }
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: [
-                  `<@${slackUserId}> — your client just paid!`,
-                  ``,
-                  `*Client:* ${clientName}${clientEmail ? ` (${clientEmail})` : ''}`,
-                  `*Service:* ${serviceName}`,
-                  `*Amount Paid:* $${amountPaid}`,
-                  `*Payment ID:* \`${paymentId}\``,
-                  `*Whop Plan ID:* \`${planId}\``
-                ].join('\n')
-              }
+      const { WebClient } = require('@slack/web-api');
+      const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+
+      await slackClient.chat.postMessage({
+        channel: slackChannel,
+        text: `💰 Payment Received! (${slackUserId ? 'Real' : 'Test/Manual'})`,
+        blocks: [
+          {
+            type: 'header',
+            text: {
+              type: 'plain_text',
+              text: slackUserId ? '💰 PAYMENT RECEIVED! 🎉' : '🧪 TEST WEBHOOK SUCCESSFUL! 🔬',
+              emoji: true
             }
-          ]
-        });
-        console.log('✅ Payment confirmation posted to Slack!');
-      }
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: [
+                slackUserId ? `<@${slackUserId}> — your client just paid!` : `_This is a test notification from Whop to verify your connection._`,
+                ``,
+                `*Client:* ${clientName}${clientEmail ? ` (${clientEmail})` : ''}`,
+                `*Service:* ${serviceName}`,
+                `*Amount Paid:* $${amountPaid}`,
+                `*Payment ID:* \`${paymentId}\``,
+                `*Whop Plan ID:* \`${planId}\``
+              ].join('\n')
+            }
+          }
+        ]
+      });
+      console.log('✅ Payment confirmation posted to Slack!');
     }
 
     res.json({ received: true });
