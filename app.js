@@ -425,6 +425,18 @@ expressApp.get('/', (req, res) => {
     }
 
     console.log('✅ Payment Link Bot is fully operational!');
+
+    // --- Slack Health Check ---
+    try {
+      const { WebClient } = require('@slack/web-api');
+      const healthCheckClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+      const auth = await healthCheckClient.auth.test();
+      console.log(`🤖 Slack Identity: @${auth.user} (${auth.team})`);
+      console.log('✅ Slack Token is VALID and authenticated.');
+    } catch (authError) {
+      console.error('❌ Slack Token Health Check FAILED:', authError.message);
+      console.error('⚠️ Please check your SLACK_BOT_TOKEN in Railway variables.');
+    }
   } catch (error) {
     console.error('❌ Failed to start the bot:', error);
   }
