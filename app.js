@@ -301,11 +301,12 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
 
   try {
     const body = JSON.parse(req.body.toString());
-    console.log(`📥 Webhook Received! Action: "${body.action}"`);
+    const eventType = body.type || body.action; // Whop uses 'type', some older versions use 'action'
+    console.log(`📥 Webhook Received! Event Type: "${eventType}"`);
     console.log('📦 Full Body (Keys):', Object.keys(body).join(', '));
 
-    // Handle both "payment.succeeded" and "payment_succeeded" just in case
-    if (body.action === 'payment.succeeded' || body.action === 'payment_succeeded') {
+    // Handle both "payment.succeeded" and "payment_succeeded"
+    if (eventType === 'payment.succeeded' || eventType === 'payment_succeeded') {
       const payment = body.data;
       const planId = payment.plan_id;
       const paymentId = payment.id;
