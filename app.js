@@ -316,7 +316,9 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
 
       // Retrieve plan details (Safely)
       let planDetails = {};
-      if (planId && !planId.startsWith('plan_test')) {
+      const isMockPlan = !planId || (typeof planId === 'string' && planId.startsWith('plan_test'));
+
+      if (planId && !isMockPlan) {
         try {
           planDetails = await whop.plans.retrieve(planId);
           console.log('📄 Plan details retrieved from Whop');
