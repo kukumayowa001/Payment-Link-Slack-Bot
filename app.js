@@ -300,7 +300,15 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
   }
 
   try {
-    const body = JSON.parse(req.body.toString());
+    let body;
+    if (Buffer.isBuffer(req.body)) {
+      body = JSON.parse(req.body.toString());
+    } else if (typeof req.body === 'object' && req.body !== null) {
+      body = req.body;
+    } else {
+      body = JSON.parse(req.body);
+    }
+
     const eventType = body.type || body.action; // Whop uses 'type', some older versions use 'action'
     console.log(`📥 Webhook Received! Event Type: "${eventType}"`);
     console.log('📦 Full Body (Keys):', Object.keys(body).join(', '));
@@ -347,45 +355,51 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
 
       console.log(`📣 Preparation for Slack Message: Channel=${slackChannel}, UserID=${slackUserId || 'MISSING (Fallback used)'}`);
 
-      const { WebClient } = require('@slack/web-api');
-      const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+      try {
+        const { WebClient } = require('@slack/web-api');
+        const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
 
-      await slackClient.chat.postMessage({
-        channel: slackChannel,
-        text: `💰 Payment Received! (${slackUserId ? 'Real' : 'Test/Manual'})`,
-        blocks: [
-          {
-            type: 'header',
-            text: {
-              type: 'plain_text',
-              text: slackUserId ? '💰 PAYMENT RECEIVED! 🎉' : '🧪 TEST WEBHOOK SUCCESSFUL! 🔬',
-              emoji: true
+        await slackClient.chat.postMessage({
+          channel: slackChannel,
+          text: `💰 Payment Received! (${slackUserId ? 'Real' : 'Test/Manual'})`,
+          blocks: [
+            {
+              type: 'header',
+              text: {
+                type: 'plain_text',
+                text: slackUserId ? '💰 PAYMENT RECEIVED! 🎉' : '🧪 TEST WEBHOOK SUCCESSFUL! 🔬',
+                emoji: true
+              }
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: [
+                  slackUserId ? `<@${slackUserId}> — your client just paid!` : `_This is a test notification from Whop to verify your connection._`,
+                  ``,
+                  `*Client:* ${clientName}${clientEmail ? ` (${clientEmail})` : ''}`,
+                  `*Service:* ${serviceName}`,
+                  `*Amount Paid:* $${amountPaid}`,
+                  `*Payment ID:* \`${paymentId}\``,
+                  `*Whop Plan ID:* \`${planId}\``
+                ].join('\n')
+              }
             }
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: [
-                slackUserId ? `<@${slackUserId}> — your client just paid!` : `_This is a test notification from Whop to verify your connection._`,
-                ``,
-                `*Client:* ${clientName}${clientEmail ? ` (${clientEmail})` : ''}`,
-                `*Service:* ${serviceName}`,
-                `*Amount Paid:* $${amountPaid}`,
-                `*Payment ID:* \`${paymentId}\``,
-                `*Whop Plan ID:* \`${planId}\``
-              ].join('\n')
-            }
-          }
-        ]
-      });
-      console.log('✅ Payment confirmation posted to Slack!');
+          ]
+        });
+        console.log('✅ Payment confirmation posted to Slack!');
+      } catch (slackError) {
+        console.error('❌ Error posting to Slack:', slackError.message);
+        // We don't throw here, so the webhook still returns 200 to Whop
+      }
     }
 
     res.json({ received: true });
   } catch (err) {
-    console.error('❌ Webhook error:', err);
-    res.status(500).send('Error');
+    console.error('❌ FATAL Webhook error:', err.message);
+    console.error(err.stack);
+    res.status(500).send(`Internal Server Error: ${err.message}`);
   }
 });
 
