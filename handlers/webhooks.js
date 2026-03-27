@@ -50,11 +50,20 @@ function register(app) {
         const paymentId = payment.id;
         const amountPaid = payment.final_amount / 100; // cents → dollars
 
-        // Retrieve which Slack user created this plan (stored in metadata)
+        // Retrieve which Slack user created this plan (stored in internal_notes)
         const planDetails = await getPlanDetails(planId);
-        const creatorSlackUserId = planDetails.metadata?.creator_slack_id;
-        const serviceName = planDetails.metadata?.service_name || 'Service';
-        const customerName = planDetails.metadata?.client_name || planDetails.metadata?.customer_name || 'the client';
+        let parsedNotes = {};
+        try {
+          if (planDetails.internal_notes) {
+            parsedNotes = JSON.parse(planDetails.internal_notes);
+          }
+        } catch (e) {
+          console.warn('Could not parse internal notes:', e.message);
+        }
+
+        const creatorSlackUserId = parsedNotes.sl;
+        const serviceName = parsedNotes.sv || 'Service';
+        const customerName = parsedNotes.cl || 'the client';
 
         if (creatorSlackUserId) {
           await app.client.chat.postMessage({

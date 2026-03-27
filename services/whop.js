@@ -19,13 +19,12 @@ async function createPaymentPlan(amount, serviceName, userId, clientName = '', c
     access_pass_id: config.whopProductId,
     initial_price: amount,
     plan_type: 'one_time',
-    internal_notes: `Created by Slack. Service: ${serviceName}. Client: ${clientName} (${clientEmail}). Rep: ${userId}.`,
-    metadata: {
-      creator_slack_id: userId,
-      service_name: serviceName,
-      client_name: clientName,
-      client_email: clientEmail
-    }
+    internal_notes: JSON.stringify({
+      sl: userId,
+      sv: serviceName,
+      cl: clientName,
+      em: clientEmail
+    })
   });
 
   return {
