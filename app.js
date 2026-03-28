@@ -8,32 +8,16 @@ const express = require('express');
 const crypto = require('crypto');
 require('dotenv').config();
 
-// --- Detect Socket Mode (local) vs HTTP (production) ---
-// FORCED OFF: Switching to HTTP Mode as per user request to avoid [WARN] timeouts
-const isSocketMode = false; 
-
-// 1. Initialize Express App first
-const expressApp = express();
-
-// 2. Initialize ExpressReceiver using our Express App
+// 2. Initialize ExpressReceiver (Standard Bolt Setup)
 const receiver = new ExpressReceiver({
-  signingSecret: process.env.SLACK_SIGNING_SECRET || 'safeguard_secret',
-  app: expressApp // This tells Bolt to use our express instance
+  signingSecret: process.env.SLACK_SIGNING_SECRET,
 });
 
-const appConfig = {
+const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
-};
+  receiver: receiver
+});
 
-if (isSocketMode) {
-  appConfig.socketMode = true;
-  appConfig.appToken = process.env.SLACK_APP_TOKEN;
-} else {
-  // Only pass receiver for HTTP mode (Production without Socket Mode)
-  appConfig.receiver = receiver;
-}
-
-const app = new App(appConfig);
 const whop = new Whop({ apiKey: process.env.WHOP_API_KEY });
 
 // ============================================================
@@ -275,9 +259,17 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
 
 // Debug middleware to log ALL incoming requests
 expressApp.use((req, res, next) => {
-  console.log(`🔌 [Express] ${req.method} ${req.path}`);
+  if (req.path === '/slack/events') {
+    console.log(`🔌 [Slack Request] ${req.method} ${req.path}`);
+  } else {
+    console.log(`🔌 [Express] ${req.method} ${req.path}`);
+  }
   next();
 });
+
+// --- Bolt Routes ---
+// This handles all Slash Commands, Interactivity, and Events at /slack/events
+expressApp.use(receiver.router);
 
 expressApp.get('/whop/webhook', (req, res) => {
   res.send('Ready to receive Whop Webhooks at this URL (POST)!');
@@ -418,23 +410,18 @@ expressApp.get('/', (req, res) => {
   try {
     const PORT = process.env.PORT || 3000;
 
-    if (isSocketMode) {
-      await app.start(); // Connects Slack via Socket Mode
-      expressApp.listen(PORT, '0.0.0.0', () => {
-        console.log(`💳 Whop webhook listener on port ${PORT} (Socket Mode Active)`);
-      });
-    } else {
-      await app.start(PORT); // Starts HTTP server for Slack + Webhooks
+    // Start Express server
+    expressApp.listen(PORT, '0.0.0.0', () => {
       console.log(`⚡ Bot & Webhooks listening on port ${PORT}`);
-    }
+      console.log(`🔗 Slack Endpoint: /slack/events`);
+      console.log(`🔗 Whop Webhook: /whop/webhook`);
+    });
 
     console.log('✅ Payment Link Bot is fully operational!');
 
     // --- Slack Health Check ---
     try {
-      const { WebClient } = require('@slack/web-api');
-      const healthCheckClient = new WebClient(process.env.SLACK_BOT_TOKEN);
-      const auth = await healthCheckClient.auth.test();
+      const auth = await app.client.auth.test();
       console.log(`🤖 Slack Identity: @${auth.user} (${auth.team})`);
       console.log('✅ Slack Token is VALID and authenticated.');
     } catch (authError) {
