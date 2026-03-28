@@ -402,6 +402,50 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
   }
 });
 
+expressApp.get('/test-notify', async (req, res) => {
+  try {
+    const { WebClient } = require('@slack/web-api');
+    const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+    const slackChannel = process.env.SLACK_NOTIFICATION_CHANNEL || '#create-payment-link';
+    
+    // This simulates @Mayowa receiving a $150.00 payment
+    await slackClient.chat.postMessage({
+      channel: slackChannel,
+      text: `💰 Payment Received! (SIMULATED TEST)`,
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '💰 PAYMENT RECEIVED! (TEST) 🎉',
+            emoji: true
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: [
+              `✅ *Payment Received!* <@${req.query.user || 'U08C7K0G0RE'}>, your client just paid!`,
+              ``,
+              `*Client:* Test Buyer (test@example.com)`,
+              `*Service:* Premium Service Simulation`,
+              `*Amount Paid:* $150.00`,
+              `*Payment ID:* \`pay_SIMULATED_12345\``,
+              `*Whop Plan ID:* \`plan_SIMULATED_67890\``,
+              ``,
+              `_Note: This is a manual test triggered via browser._`
+            ].join('\n')
+          }
+        }
+      ]
+    });
+    res.send('<h1>✅ Test Notification Sent!</h1><p>Check your Slack channel. If you see the message, your bot is working perfectly.</p>');
+  } catch (error) {
+    res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
 expressApp.get('/', (req, res) => {
   res.send('Whop Payment Link Bot is running!');
 });
