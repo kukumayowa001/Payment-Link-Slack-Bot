@@ -8,6 +8,9 @@ const express = require('express');
 const crypto = require('crypto');
 require('dotenv').config();
 
+// 1. Initialize Express App
+const expressApp = express();
+
 // 2. Initialize ExpressReceiver (Standard Bolt Setup)
 const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
