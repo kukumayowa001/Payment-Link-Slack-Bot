@@ -188,15 +188,8 @@ app.view('create_payment_link_modal', async ({ ack, view, client }) => {
       initial_price: amountNum,
       plan_type: 'one_time',
       title: `${serviceName} for ${clientName}`.substring(0, 30),
-      // Attach Slack User ID to metadata as requested
-      metadata: {
-        creator_slack_id: userId,
-        service_name: serviceName.substring(0, 60),
-        client_name: clientName.substring(0, 60),
-        client_email: clientEmail.substring(0, 50),
-        channel_id: channelId
-      },
-      // Keep internal_notes as a backup
+      // Whop SDK doesn't natively support the metadata parameter on this endpoint
+      // So we store all our tracking data as JSON inside internal_notes
       internal_notes: JSON.stringify({
         sl: userId,
         sv: serviceName.substring(0, 60),
@@ -356,13 +349,12 @@ expressApp.post('/whop/webhook', express.raw({ type: 'application/json' }), asyn
         console.warn('❌ Could not parse internal notes as JSON:', e.message);
       }
       
-      // Extract Slack User ID from metadata (Priority) or fallback to internal_notes
-      const metadata_from_plan = planDetails.metadata || {};
-      const slackUserId = metadata_from_plan.creator_slack_id || parsedNotes.sl;
-      const clientName = metadata_from_plan.client_name || parsedNotes.cl || 'Test Client';
-      const clientEmail = metadata_from_plan.client_email || parsedNotes.em || 'test@example.com';
-      const serviceName = metadata_from_plan.service_name || parsedNotes.sv || 'Test Service';
-      const slackChannel = metadata_from_plan.channel_id || parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#create-payment-link';
+      // Extract Slack User ID from internal_notes
+      const slackUserId = parsedNotes.sl;
+      const clientName = parsedNotes.cl || 'Test Client';
+      const clientEmail = parsedNotes.em || 'test@example.com';
+      const serviceName = parsedNotes.sv || 'Test Service';
+      const slackChannel = parsedNotes.ch || process.env.SLACK_NOTIFICATION_CHANNEL || '#create-payment-link';
 
       console.log(`📣 Preparation for Slack Message: Channel=${slackChannel}, UserID=${slackUserId || 'MISSING (Fallback used)'}`);
       console.log('🚀 Progress: Reached Slack Notification Block');

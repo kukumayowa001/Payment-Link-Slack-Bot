@@ -61,9 +61,9 @@ function register(app) {
           console.warn('Could not parse internal notes:', e.message);
         }
 
-        const creatorSlackUserId = planDetails.metadata?.creator_slack_id || parsedNotes.sl;
-        const serviceName = planDetails.metadata?.service_name || parsedNotes.sv || 'Service';
-        const customerName = planDetails.metadata?.client_name || parsedNotes.cl || 'the client';
+        const creatorSlackUserId = parsedNotes.sl;
+        const serviceName = parsedNotes.sv || 'Service';
+        const customerName = parsedNotes.cl || 'the client';
  
         if (creatorSlackUserId) {
           await app.client.chat.postMessage({

@@ -24,13 +24,7 @@ async function createPaymentPlan(amount, serviceName, userId, clientName = '', c
       sv: serviceName,
       cl: clientName,
       em: clientEmail
-    }),
-    metadata: {
-      creator_slack_id: userId,
-      service_name: serviceName,
-      client_name: clientName,
-      client_email: clientEmail
-    }
+    })
   });
 
   return {
